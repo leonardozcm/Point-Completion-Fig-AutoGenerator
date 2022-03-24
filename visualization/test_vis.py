@@ -16,7 +16,6 @@ def get_ptcloud_img_fromfile(path):
     return img
 
 
-
 if __name__ == "__main__":
 
 

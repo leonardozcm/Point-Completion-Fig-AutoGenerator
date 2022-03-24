@@ -9,7 +9,7 @@ from tqdm import tqdm
 from utils.average_meter import AverageMeter
 from utils.metrics import Metrics
 from utils.loss_utils import get_loss
-from models.model import SnowflakeNet as Model
+from Snowflake.model import SnowflakeNet as Model
 
 def test_net(cfg, epoch_idx=-1, test_data_loader=None, test_writer=None, model=None):
     # Enable the inbuilt cudnn auto-tuner to find the best algorithm to use
