@@ -1,4 +1,7 @@
+# type: ignore
+
 import matplotlib
+from tomlkit import key
 matplotlib.use("Agg")
 import torch
 from utils.loss_utils import chamfer_sqrt
@@ -26,15 +29,14 @@ class CandiModel(object):
         ptcloud_img = utils.helpers.get_ptcloud_img(ptcloud)
         return ptcloud_img
 
-
     def eval(self):
         self.model.eval()
 
-def loadParallelModel(model, path, subkey=True):
+def loadParallelModel(model, path, subkey=True, keyname='model'):
     checkpoint = torch.load(path)
     model = torch.nn.DataParallel(model).cuda()
     if subkey:
-        print(model.load_state_dict(checkpoint['model']))
+        print(model.load_state_dict(checkpoint[keyname]))
     else:
         print(model.load_state_dict(checkpoint))
     return model
@@ -84,16 +86,17 @@ def generateImg(test_data_loader=None, model=None, files=None):
                 # b, n, 3
 
                 img = model.getImg(partial)
-                dir_name = "visualization/imgs"+id[0] + "/"+ model.name
+                dir_name = "visualization/imgs/"+id[0] + "/"+ model.name
                 if not os.path.exists(dir_name):
                     os.makedirs(dir_name)
                 cv2.imwrite(dir_name+"/"+save_name+".png", img)
 
 
-def select_outperforms():
+def select_outperforms(threshold=7.0):
     file_name = []
     for file, pair in result.items():
-        file_name.append((file, pair["SnowflakeNet"]-pair["Ours"]))
+        if pair["Ours"] < threshold:
+            file_name.append((file, pair["SnowflakeNet"]-pair["Ours"]))
     
     file_name= sorted(file_name, key=lambda x:x[1], reverse=True)
 
@@ -118,24 +121,29 @@ test_data_loader = torch.utils.data.DataLoader(dataset=dataset_loader.get_datase
                                                 shuffle=False)
 from SiaTrans.model import SiaTrans
 from Snowflake.model import SnowflakeNet
+from GRNet.grnet import GRNet
+# from PMPNet.model import Model as PMPNet
+from PCN.pcn import PCN
+
+# load PCN
+pcn_model = PCN(num_dense=16384, latent_dim=1024, grid_size=4).cuda()
+print(pcn_model.load_state_dict(torch.load("checkpoint/best_l1_cd.pth")))
+
 
 Model_list = [
-    # CandiModel("GRNet", "checkpoint/grnet.pth", ),
-    # CandiModel("PCN", "checkpoint/pcn.pth", ),
-    # CandiModel("PMPNet", "checkpoint/pmpnet.pth", ),
+    CandiModel("GRNet", loadParallelModel(GRNet(),"checkpoint/grnet.pth",keyname='grnet')),
+    CandiModel("PCN", pcn_model),
+    # CandiModel("PMPNet", loadParallelModel(PMPNet(),"checkpoint/pmpnet.pth") ),
     CandiModel("SnowflakeNet", loadParallelModel(SnowflakeNet(up_factors=[4,8]),"checkpoint/snowflakenet.pth") ),
     CandiModel("Ours", loadParallelModel(SiaTrans(up_factors=[4,8]),"checkpoint/ours.pth")),
 ]
 
-for model in Model_list:
+for model in Model_list[-2:]:
     test_net(test_data_loader, model)
 
-
-
-file_select = select_outperforms()
-
-
-print(file_select)
+file_select = select_outperforms(5.0)
+for x in file_select:
+    print(x[1])
 
 for model in Model_list:
     generateImg(test_data_loader, model,file_select)
