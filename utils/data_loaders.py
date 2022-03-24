@@ -88,6 +88,7 @@ class Dataset(torch.utils.data.dataset.Dataset):
         if 'n_renderings' in self.options:
             rand_idx = random.randint(0, self.options['n_renderings'] - 1) if self.options['shuffle'] else 0
 
+        file_path = ""
         for ri in self.options['required_items']:
             file_path = sample['%s_path' % ri]
             if type(file_path) == list:
@@ -98,7 +99,7 @@ class Dataset(torch.utils.data.dataset.Dataset):
         if self.transforms is not None:
             data = self.transforms(data)
 
-        return sample['taxonomy_id'], sample['model_id'], data
+        return sample['taxonomy_id'], file_path, data
 
 
 class ShapeNetDataLoader(object):
