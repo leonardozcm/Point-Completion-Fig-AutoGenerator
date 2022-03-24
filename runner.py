@@ -1,8 +1,12 @@
+from tkinter.messagebox import NO
 import torch
 from utils.loss_utils import chamfer_sqrt
 import utils.data_loaders
 import utils.helpers
 from tqdm import tqdm
+from visualization.test_vis import get_ptcloud_img
+from utils.io import IO
+import numpy as np
 
 
 class CandiModel(object):
@@ -18,6 +22,13 @@ class CandiModel(object):
         pred = self.model(data)
         cd = chamfer_sqrt(pred, gt)
         return cd.item() * 1e3
+    
+    def getImg(self, partial):
+        pred = self.model(partial)
+        ptcloud = pred.squeeze().cpu().numpy()
+        ptcloud_img = utils.helpers.get_ptcloud_img(ptcloud)
+        return ptcloud_img
+
 
     def eval(self):
         self.model.eval()
@@ -45,14 +56,16 @@ def test_net(test_data_loader=None, model=None):
                 result[file_path][model.name]=cd
 
 
-def generateImg(test_data_loader=None, model=None, ):
+def generateImg(test_data_loader=None, model=None, files=None):
     # Enable the inbuilt cudnn auto-tuner to find the best algorithm to use
     torch.backends.cudnn.benchmark = True
     model.eval()
+
+
     with tqdm(test_data_loader) as t:
         for _, (_, file_path, data) in enumerate(t):
-            if not result.has_key(file_path):
-                result[file_path]={}
+            if file_path not in files:
+                continue
 
             with torch.no_grad():
                 for k, v in data.items():
@@ -62,7 +75,7 @@ def generateImg(test_data_loader=None, model=None, ):
                 gt = data['gtcloud']
                 # b, n, 3
 
-                cd = model(partial.contiguous(), gt)
+                cd = model.ge (partial.contiguous(), gt)
 
                 result[file_path][model.name]=cd
 
@@ -102,4 +115,13 @@ for model in Model_list[-2:]:
 
 file_select = select_outperforms()
 
-
+transforms = utils.data_transforms.Compose([{
+                'callback': 'UpSamplePoints',
+                'parameters': {
+                    'n_points': cfg.DATASETS.SHAPENET.N_POINTS
+                },
+                'objects': ['partial_cloud']
+            }, {
+                'callback': 'ToTensor',
+                'objects': ['partial_cloud', 'gtcloud']
+            }])
