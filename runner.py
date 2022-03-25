@@ -78,6 +78,8 @@ def generateImg(test_data_loader=None, model=None, files=None):
     torch.backends.cudnn.benchmark = True
     model.eval()
 
+    img_list = []
+
 
     with tqdm(test_data_loader) as t:
         for _, (id, file_path, data) in enumerate(t):
@@ -98,10 +100,25 @@ def generateImg(test_data_loader=None, model=None, files=None):
                 dir_name = "visualization/imgs/"+id[0] + "/"+ model.name
                 if not os.path.exists(dir_name):
                     os.makedirs(dir_name)
-                cv2.imwrite(dir_name+"/"+save_name+".png",crop_img(img))
+                img_croped = crop_img(img)
+                cv2.imwrite(dir_name+"/"+save_name+".png",img_croped)
+                img_list.append((save_name, img_croped))
+    return img_list
+
+def concatImg(imgLists, img_scale):
+    himg = []
+    for model_instance in img_dict:
+        himg.append(cv2.hconcat([x[1] for x in model_instance[1]]))
+
+    return cv2.vconcat(himg)
+
 
 
 def writeinputandgt(test_dataloader=None, files=None):
+    partial_list = []
+    gtcloud_list = []
+    data_keys = {'partial_cloud':partial_list, 'gtcloud':gtcloud_list}
+
     with tqdm(test_data_loader) as t:
         for _, (id, file_path, data) in enumerate(t):
             file_path = file_path[0]
@@ -113,23 +130,27 @@ def writeinputandgt(test_dataloader=None, files=None):
                 for k, v in data.items():
                     data[k] = utils.helpers.var_or_cuda(v)
                 
-                data_keys = ['partial_cloud', 'gtcloud']
-                for k in data_keys:
+                
+                for k, ls in data_keys.items():
                     pcd = data[k]
                     img = utils.helpers.get_ptcloud_img(pcd.squeeze().cpu().numpy())
                     dir_name = "visualization/imgs/"+id[0] + "/"+ k
                     if not os.path.exists(dir_name):
                         os.makedirs(dir_name)
-                    cv2.imwrite(dir_name+"/"+save_name+".png", crop_img(img))
+                    img_croped = crop_img(img)
+                    cv2.imwrite(dir_name+"/"+save_name+".png",img_croped)
+                    ls.append((save_name, img_croped))
+    
+    return [('partial_cloud',data_keys['partial_cloud']), ('gtcloud',data_keys['gtcloud'])]
 
 
-def select_outperforms(threshold=7.0):
+def select_outperforms(threshold=1.0):
     file_name = []
     for file, pair in result.items():
-        if pair["Ours"] < threshold:
-            file_name.append((file, pair["SnowflakeNet"]-pair["Ours"]))
+        if pair["SnowflakeNet"]-pair["Ours"] > threshold:
+            file_name.append((file,  pair["SnowflakeNet"]-pair["Ours"], pair["Ours"]))
     
-    file_name= sorted(file_name, key=lambda x:x[1], reverse=True)
+    file_name= sorted(file_name, key=lambda x:x[2])
 
     # for x in file_name:
     #   print(x[1])
@@ -178,7 +199,12 @@ file_select = select_outperforms(4.0)
 for x in file_select:
     print(x[1])
 
-for model in Model_list:
-    generateImg(test_data_loader, model,file_select)
+img_dict = []
 
-writeinputandgt(test_data_loader,file_select)
+for model in Model_list:
+    img_dict.append((model.name,generateImg(test_data_loader, model,file_select)))
+ 
+head_tail = writeinputandgt(test_data_loader,file_select)
+img_dict.insert(0,head_tail[0])
+img_dict.append(head_tail[1])
+cv2.imwrite("visualization/concat.png",concatImg(img_dict,int(800*0.6))
