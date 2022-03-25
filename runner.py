@@ -32,9 +32,12 @@ class CandiModel(object):
     def eval(self):
         self.model.eval()
 
-def loadParallelModel(model, path, subkey=True, keyname='model'):
+def loadParallelModel(model, path, subkey=True, keyname='model', parallel=True):
     checkpoint = torch.load(path)
-    model = torch.nn.DataParallel(model).cuda()
+    if parallel:
+        model = torch.nn.DataParallel(model).cuda()
+    else:
+        model=model.cuda()
     if subkey:
         print(model.load_state_dict(checkpoint[keyname]))
     else:
@@ -124,6 +127,7 @@ from Snowflake.model import SnowflakeNet
 from GRNet.grnet import GRNet
 # from PMPNet.model import Model as PMPNet
 from PCN.pcn import PCN
+from VRCNet.vrcet import Model as Vrcnet
 
 # load PCN
 pcn_model = PCN(num_dense=16384, latent_dim=1024, grid_size=4).cuda()
@@ -133,6 +137,7 @@ print(pcn_model.load_state_dict(torch.load("checkpoint/best_l1_cd.pth")))
 Model_list = [
     CandiModel("GRNet", loadParallelModel(GRNet(),"checkpoint/grnet.pth",keyname='grnet')),
     CandiModel("PCN", pcn_model),
+    CandiModel("VRCNet", loadParallelModel(Vrcnet(),"checkpoint/pretrained_vrcnet_2048.pth",keyname='net_state_dict', parallel=False)),
     # CandiModel("PMPNet", loadParallelModel(PMPNet(),"checkpoint/pmpnet.pth") ),
     CandiModel("SnowflakeNet", loadParallelModel(SnowflakeNet(up_factors=[4,8]),"checkpoint/snowflakenet.pth") ),
     CandiModel("Ours", loadParallelModel(SiaTrans(up_factors=[4,8]),"checkpoint/ours.pth")),
@@ -141,7 +146,7 @@ Model_list = [
 for model in Model_list[-2:]:
     test_net(test_data_loader, model)
 
-file_select = select_outperforms(5.0)
+file_select = select_outperforms(4.0)
 for x in file_select:
     print(x[1])
 
