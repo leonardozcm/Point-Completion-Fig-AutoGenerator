@@ -32,6 +32,12 @@ class CandiModel(object):
     def eval(self):
         self.model.eval()
 
+def crop_img(img, factor=0.2):
+    w,_,_=img.shape
+    crop_len = int(factor*w)
+    img_crop = img[crop_len: w-crop_len, crop_len:h-crop_len,:]
+    return img_crop
+
 def loadParallelModel(model, path, subkey=True, keyname='model', parallel=True):
     checkpoint = torch.load(path)
     if parallel:
@@ -92,7 +98,29 @@ def generateImg(test_data_loader=None, model=None, files=None):
                 dir_name = "visualization/imgs/"+id[0] + "/"+ model.name
                 if not os.path.exists(dir_name):
                     os.makedirs(dir_name)
-                cv2.imwrite(dir_name+"/"+save_name+".png", img)
+                cv2.imwrite(dir_name+"/"+save_name+".png",crop_img(img))
+
+
+def writeinputandgt(test_dataloader=None, files=None):
+    with tqdm(test_data_loader) as t:
+        for _, (id, file_path, data) in enumerate(t):
+            file_path = file_path[0]
+            if file_path not in [k[0] for k in files]:
+                continue
+            save_name = file_path.split("/")[-1]
+
+            with torch.no_grad():
+                for k, v in data.items():
+                    data[k] = utils.helpers.var_or_cuda(v)
+                
+                data_keys = ['partial_cloud', 'gtcloud']
+                for k in data_keys:
+                    pcd = data[k]
+                    img = utils.helpers.get_ptcloud_img(pcd.squeeze().cpu().numpy())
+                    dir_name = "visualization/imgs/"+id[0] + "/"+ k
+                    if not os.path.exists(dir_name):
+                        os.makedirs(dir_name)
+                    cv2.imwrite(dir_name+"/"+save_name+".png", crop_img(img))
 
 
 def select_outperforms(threshold=7.0):
@@ -152,3 +180,5 @@ for x in file_select:
 
 for model in Model_list:
     generateImg(test_data_loader, model,file_select)
+
+writeinputandgt(test_data_loader,file_select)
