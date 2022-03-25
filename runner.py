@@ -105,9 +105,9 @@ def generateImg(test_data_loader=None, model=None, files=None):
                 img_list.append((save_name, img_croped))
     return img_list
 
-def concatImg(imgLists, img_scale):
+def concatImg(imgLists):
     himg = []
-    for model_instance in img_dict:
+    for model_instance in imgLists:
         himg.append(cv2.hconcat([x[1] for x in model_instance[1]]))
 
     return cv2.vconcat(himg)
@@ -203,8 +203,8 @@ img_dict = []
 
 for model in Model_list:
     img_dict.append((model.name,generateImg(test_data_loader, model,file_select)))
- 
+
 head_tail = writeinputandgt(test_data_loader,file_select)
 img_dict.insert(0,head_tail[0])
 img_dict.append(head_tail[1])
-cv2.imwrite("visualization/concat.png",concatImg(img_dict,int(800*0.6))
+cv2.imwrite("visualization/concat.png",concatImg(img_dict)
