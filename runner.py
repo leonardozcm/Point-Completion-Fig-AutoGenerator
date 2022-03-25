@@ -35,7 +35,7 @@ class CandiModel(object):
 def crop_img(img, factor=0.2):
     w,_,_=img.shape
     crop_len = int(factor*w)
-    img_crop = img[crop_len: w-crop_len, crop_len:h-crop_len,:]
+    img_crop = img[crop_len: w-crop_len, crop_len:w-crop_len,:]
     return img_crop
 
 def loadParallelModel(model, path, subkey=True, keyname='model', parallel=True):
@@ -114,7 +114,7 @@ def concatImg(imgLists):
 
 
 
-def writeinputandgt(test_dataloader=None, files=None):
+def writeinputandgt(test_data_loader=None, files=None):
     partial_list = []
     gtcloud_list = []
     data_keys = {'partial_cloud':partial_list, 'gtcloud':gtcloud_list}
@@ -195,7 +195,7 @@ Model_list = [
 for model in Model_list[-2:]:
     test_net(test_data_loader, model)
 
-file_select = select_outperforms(4.0)
+file_select = select_outperforms(1.1)
 for x in file_select:
     print(x[1])
 
@@ -207,4 +207,4 @@ for model in Model_list:
 head_tail = writeinputandgt(test_data_loader,file_select)
 img_dict.insert(0,head_tail[0])
 img_dict.append(head_tail[1])
-cv2.imwrite("visualization/concat.png",concatImg(img_dict)
+cv2.imwrite("visualization/concat.png",concatImg(img_dict))
