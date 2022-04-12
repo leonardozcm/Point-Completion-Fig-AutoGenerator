@@ -143,12 +143,13 @@ class SPD(nn.Module):
         return pcd_child, K_curr
 
 class SiaTrans(nn.Module):
-    def __init__(self, dim_feat=512, num_pc=256, num_p0=512, radius=1, up_factors=[4, 8]):
+    def __init__(self, dim_feat=512, num_pc=256, num_p0=512, radius=1, up_factors=[4, 8],c3d=False):
         super(SiaTrans, self).__init__()
 
         self.encoder = FeatureExtractor()
         self.decoder = SeedGenerator()
         self.num_p0 = num_p0
+        self.c3d=c3d
 
         if up_factors is None:
             up_factors = [1]
@@ -191,7 +192,10 @@ class SiaTrans(nn.Module):
             arr_pcd.append(pcd.permute(0, 2, 1).contiguous())
 
         # print("y_fine: ", y_fine.shape)
-        return arr_pcd[-1]
+        if self.c3d:
+            return fps_subsample(arr_pcd[-1],2048)
+        else:
+            return arr_pcd[-1]
 
 if __name__ == "__main__":
     pcs = torch.rand(16, 2048,3).cuda()

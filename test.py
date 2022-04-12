@@ -1,17 +1,31 @@
 # -*- coding: utf-8 -*-
 # @Author: XP
-
+# type: ignore
 import logging
+from operator import mod
+from pip import main
 import torch
 import utils.data_loaders
 import utils.helpers
 from tqdm import tqdm
 from utils.average_meter import AverageMeter
 from utils.metrics import Metrics
-from utils.loss_utils import get_loss
-from Snowflake.model import SnowflakeNet as Model
+from utils.loss_utils import chamfer_sqrt
+from SiaTrans.utils import fps_subsample
 
-def test_net(cfg, epoch_idx=-1, test_data_loader=None, test_writer=None, model=None):
+def loadParallelModel(model, path, subkey=True, keyname='model', parallel=True):
+    checkpoint = torch.load(path)
+    if parallel:
+        model = torch.nn.DataParallel(model).cuda()
+    else:
+        model=model.cuda()
+    if subkey:
+        print(model.load_state_dict(checkpoint[keyname]))
+    else:
+        print(model.load_state_dict(checkpoint))
+    return model
+
+def test_net(cfg, test_data_loader=None, model=None):
     # Enable the inbuilt cudnn auto-tuner to find the best algorithm to use
     torch.backends.cudnn.benchmark = True
 
@@ -26,21 +40,10 @@ def test_net(cfg, epoch_idx=-1, test_data_loader=None, test_writer=None, model=N
                                                        pin_memory=True,
                                                        shuffle=False)
 
-    # Setup networks and initialize networks
-    if model is None:
-        model = Model(dim_feat=512, up_factors=[4, 8])
-        if torch.cuda.is_available():
-            model = torch.nn.DataParallel(model).cuda()
-
-        logging.info('Recovering from %s ...' % (cfg.CONST.WEIGHTS))
-        checkpoint = torch.load(cfg.CONST.WEIGHTS)
-        model.load_state_dict(checkpoint['model'])
-
     # Switch models to evaluation mode
     model.eval()
 
     n_samples = len(test_data_loader)
-    test_losses = AverageMeter(['cdc', 'cd1', 'cd2', 'cd3', 'partial_matching'])
     test_metrics = AverageMeter(Metrics.names())
     category_metrics = dict()
 
@@ -60,26 +63,14 @@ def test_net(cfg, epoch_idx=-1, test_data_loader=None, test_writer=None, model=N
                 b, n, _ = partial.shape
 
                 pcds_pred = model(partial.contiguous())
-                loss_total, losses = get_loss(pcds_pred, partial, gt, sqrt=True)
-
-
-                cdc = losses[0].item() * 1e3
-                cd1 = losses[1].item() * 1e3
-                cd2 = losses[2].item() * 1e3
-                cd3 = losses[3].item() * 1e3
-                partial_matching = losses[4].item() * 1e3
+                cd3 = chamfer_sqrt(pcds_pred, gt).item() * 1e3
 
                 _metrics = [cd3]
-                test_losses.update([cdc, cd1, cd2, cd3, partial_matching])
 
                 test_metrics.update(_metrics)
                 if taxonomy_id not in category_metrics:
                     category_metrics[taxonomy_id] = AverageMeter(Metrics.names())
                 category_metrics[taxonomy_id].update(_metrics)
-
-                t.set_description('Test[%d/%d] Taxonomy = %s Sample = %s Losses = %s Metrics = %s' %
-                             (model_idx + 1, n_samples, taxonomy_id, model_id, ['%.4f' % l for l in test_losses.val()
-                                                                                ], ['%.4f' % m for m in _metrics]))
 
     # Print testing results
     print('============================ TEST RESULTS ============================')
@@ -90,7 +81,7 @@ def test_net(cfg, epoch_idx=-1, test_data_loader=None, test_writer=None, model=N
     print()
 
     for taxonomy_id in category_metrics:
-        print(taxonomy_id, end='\t')
+        print(taxonomy_map[taxonomy_id], end='\t')
         print(category_metrics[taxonomy_id].count(0), end='\t')
         for value in category_metrics[taxonomy_id].avg():
             print('%.4f' % value, end='\t')
@@ -101,19 +92,28 @@ def test_net(cfg, epoch_idx=-1, test_data_loader=None, test_writer=None, model=N
         print('%.4f' % value, end='\t')
     print('\n')
 
-    print('Epoch ', epoch_idx, end='\t')
-    for value in test_losses.avg():
-        print('%.4f' % value, end='\t')
-    print('\n')
+if __name__ == "__main__":
+    from config_pcn import cfg
+    from SiaTrans.model import SiaTrans
+    taxonomy_map = {
+        "02691156":"airplane",
+        "02933112":"cabinet",
+        "02958343":"car",
+        "03001627":"chair",
+        "03636649":"lamp",
+        "04256520":"sofa",
+        "04379243":"table",
+        "04530566":"watercraft"
+    }
 
-    # Add testing results to TensorBoard
-    if test_writer is not None:
-        test_writer.add_scalar('Loss/Epoch/cdc', test_losses.avg(0), epoch_idx)
-        test_writer.add_scalar('Loss/Epoch/cd1', test_losses.avg(1), epoch_idx)
-        test_writer.add_scalar('Loss/Epoch/cd2', test_losses.avg(2), epoch_idx)
-        test_writer.add_scalar('Loss/Epoch/cd3', test_losses.avg(3), epoch_idx)
-        test_writer.add_scalar('Loss/Epoch/partial_matching', test_losses.avg(4), epoch_idx)
-        for i, metric in enumerate(test_metrics.items):
-            test_writer.add_scalar('Metric/%s' % metric, test_metrics.avg(i), epoch_idx)
+    dataset_loader = utils.data_loaders.DATASET_LOADER_MAPPING[cfg.DATASET.TEST_DATASET](cfg)
+    test_data_loader = torch.utils.data.DataLoader(dataset=dataset_loader.get_dataset(
+        utils.data_loaders.DatasetSubset.TEST),
+                                                    batch_size=1,
+                                                    num_workers=cfg.CONST.NUM_WORKERS,
+                                                    collate_fn=utils.data_loaders.collate_fn,
+                                                    pin_memory=True,
+                                                    shuffle=False)
 
-    return test_losses.avg(3)
+    model = loadParallelModel(SiaTrans(up_factors=[4,8]),"checkpoint/wopa.pth")
+    test_net(cfg,test_data_loader,model=model)

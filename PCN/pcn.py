@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from ASFMNet.modelutils import fps_subsample
 
 
 class PCN(nn.Module):
@@ -13,7 +14,7 @@ class PCN(nn.Module):
         num_coarse: 1024
     """
 
-    def __init__(self, num_dense=16384, latent_dim=1024, grid_size=4):
+    def __init__(self, num_dense=16384, latent_dim=1024, grid_size=4, c3d=False):
         super().__init__()
 
         self.num_dense = num_dense
@@ -59,6 +60,7 @@ class PCN(nn.Module):
         b = torch.linspace(-0.05, 0.05, steps=self.grid_size, dtype=torch.float).view(self.grid_size, 1).expand(self.grid_size, self.grid_size).reshape(1, -1)
         
         self.folding_seed = torch.cat([a, b], dim=0).view(1, 2, self.grid_size ** 2).cuda()  # (1, 2, S)
+        self.c3d=c3d
 
     def forward(self, xyz):
         B, N, _ = xyz.shape
@@ -83,4 +85,8 @@ class PCN(nn.Module):
     
         fine = self.final_conv(feat) + point_feat                                            # (B, 3, num_fine), fine point cloud
 
-        return fine.transpose(1, 2).contiguous()
+        fine=fine.transpose(1, 2).contiguous()
+        if self.c3d:
+            return fps_subsample(fine,2048)
+        else:
+            return fine

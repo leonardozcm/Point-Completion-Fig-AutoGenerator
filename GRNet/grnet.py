@@ -9,6 +9,7 @@ import torch
 
 from extensions.gridding import Gridding, GriddingReverse
 from extensions.cubic_feature_sampling import CubicFeatureSampling
+from ASFMNet.modelutils import fps_subsample
 
 
 class RandomPointSampling(torch.nn.Module):
@@ -36,8 +37,9 @@ class RandomPointSampling(torch.nn.Module):
 
 
 class GRNet(torch.nn.Module):
-    def __init__(self):
+    def __init__(self,c3d=False):
         super(GRNet, self).__init__()
+        self.c3d=c3d
         self.gridding = Gridding(scale=64)
         self.conv1 = torch.nn.Sequential(
             torch.nn.Conv3d(1, 32, kernel_size=4, padding=2),
@@ -156,4 +158,7 @@ class GRNet(torch.nn.Module):
         dense_cloud = sparse_cloud.unsqueeze(dim=2).repeat(1, 1, 8, 1).view(-1, 16384, 3) + point_offset
         # print(dense_cloud.size())       # torch.Size([batch_size, 16384, 3])
 
-        return dense_cloud
+        if self.c3d:
+            return fps_subsample(dense_cloud.contiguous(),2048)
+        else:
+            return dense_cloud

@@ -155,7 +155,7 @@ class Decoder(nn.Module):
 
 
 class SnowflakeNet(nn.Module):
-    def __init__(self, dim_feat=512, num_pc=256, num_p0=512, radius=1, up_factors=None):
+    def __init__(self, dim_feat=512, num_pc=256, num_p0=512, radius=1, up_factors=None, rt_coarse=False,c3d=False):
         """
         Args:
             dim_feat: int, dimension of global feature
@@ -167,6 +167,8 @@ class SnowflakeNet(nn.Module):
         super(SnowflakeNet, self).__init__()
         self.feat_extractor = FeatureExtractor(out_dim=dim_feat)
         self.decoder = Decoder(dim_feat=dim_feat, num_pc=num_pc, num_p0=num_p0, radius=radius, up_factors=up_factors)
+        self.rt_coarse = rt_coarse
+        self.c3d=c3d
 
     def forward(self, point_cloud, return_P0=False):
         """
@@ -177,7 +179,13 @@ class SnowflakeNet(nn.Module):
         point_cloud = point_cloud.permute(0, 2, 1).contiguous()
         feat = self.feat_extractor(point_cloud)
         out = self.decoder(feat, pcd_bnc, return_P0=return_P0)
-        return out[-1]
+        if self.c3d:
+            return fps_subsample(out[-1],2048)
+
+        if self.rt_coarse:
+            return out
+        else:
+            return out[-1]
 
 if __name__ == "__main__":
     pcs = torch.rand(16, 2048,3).cuda()

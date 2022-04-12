@@ -32,7 +32,7 @@ class CandiModel(object):
     def eval(self):
         self.model.eval()
 
-def crop_img(img, factor=0.2):
+def crop_img(img, factor=0.25):
     w,_,_=img.shape
     crop_len = int(factor*w)
     img_crop = img[crop_len: w-crop_len, crop_len:w-crop_len,:]
@@ -145,17 +145,32 @@ def writeinputandgt(test_data_loader=None, files=None):
 
 
 def select_outperforms(threshold=1.0):
-    file_name = []
+    taxonomy_map = {
+        "02691156":[],
+        "02933112":[],
+        "02958343":[],
+        "03001627":[],
+        "03636649":[],
+        "04256520":[],
+        "04379243":[],
+        "04530566":[]
+    }
+    taxes = list(taxonomy_map.keys())
+
     for file, pair in result.items():
+        file_tax = file.split("/")[-2]
         if pair["SnowflakeNet"]-pair["Ours"] > threshold:
-            file_name.append((file,  pair["SnowflakeNet"]-pair["Ours"], pair["Ours"]))
+            taxonomy_map[file_tax].append((file,  pair["SnowflakeNet"]-pair["Ours"], pair["Ours"]))
     
-    file_name= sorted(file_name, key=lambda x:x[2])
+    file_name = []
+    for k,v in taxonomy_map.items():
+        file_name.extend(sorted(v, key=lambda x:x[2])[:5])
 
     # for x in file_name:
     #   print(x[1])
     
-    return file_name[:10]
+    
+    return file_name
 
 if os.path.exists('visualization/imgs'):
     import shutil
